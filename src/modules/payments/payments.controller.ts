@@ -93,7 +93,6 @@ export class PaymentsController {
     return this.paymentsService.verifyAppleAndActivate(
       user.sub,
       body.receipt,
-      body.originalTransactionId,
     );
   }
 
