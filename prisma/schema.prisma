@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String    @id @default(uuid())
+  email          String    @unique
+  name           String
+  surname        String    @default("")
+  passwordHash   String?
+  premiumUntil   DateTime?
+  nameUpdatedAt  DateTime  @default(now())
+  nameChangeCount Int      @default(0)
+  createdAt      DateTime  @default(now())
+  deletedAt      DateTime?
+
+  refreshSessions RefreshSession[]
+  devices         Device[]
+  subscription    Subscription?
+  yookassaPayments YookassaPayment[]
+}
+
+model RefreshSession {
+  id           String    @id @default(uuid())
+  userId       String
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  replacedById String?
+  ip           String?
+  userAgent    String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+
+model Device {
+  id             String   @id
+  userId         String
+  platform       String?
+  pushToken      String?
+  preferredLocale String?
+  lastSeenAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+
+model Subscription {
+  userId       String   @id
+  productId    String
+  store        String?  // INTERNAL | APPLE | GOOGLE
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  updatedAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model YookassaPayment {
+  id                 String    @id
+  planId              String
+  emailOrId           String
+  status              String
+  userId              String?
+  grantedAt           DateTime?
+  createdAt           DateTime  @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  @@index([emailOrId])
+}
+
+model AuthLockout {
+  key        String   @id
+  attempts   Int      @default(0)
+  lockedUntil DateTime?
+  updatedAt  DateTime  @default(now())
+}

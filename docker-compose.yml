@@ -1,0 +1,53 @@
+# Harmony Backend + PostgreSQL — запуск на локалке
+# copy env.docker.example .env  затем  docker compose up -d --build
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: harmony_postgres
+    environment:
+      POSTGRES_USER: harmony
+      POSTGRES_PASSWORD: harmony_secret
+      POSTGRES_DB: harmony
+    ports:
+      - "5432:5432"
+    volumes:
+      - harmony_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U harmony -d harmony"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: harmony-backend
+    container_name: harmony_backend
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      API_PREFIX: /api
+      DATABASE_URL: postgresql://harmony:harmony_secret@postgres:5432/harmony
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-harmony-local-jwt-access-secret-min-32-chars}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-harmony-local-jwt-refresh-secret-min-32-chars}
+      APP_KEY: ${APP_KEY:-harmony-local-app-key-min-8}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/api/health', (r) => { r.resume(); process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+volumes:
+  harmony_pgdata:
