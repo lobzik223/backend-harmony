@@ -7,6 +7,7 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY package.json package-lock.json ./
+COPY prisma ./prisma
 RUN npm install
 
 COPY . .
@@ -22,6 +23,7 @@ RUN apk add --no-cache dumb-init tzdata ca-certificates && \
     adduser -S nestjs -u 1001 -G nodejs
 
 COPY package.json package-lock.json ./
+COPY prisma ./prisma
 RUN npm install --omit=dev && npm cache clean --force
 RUN npm install prisma@6 --no-save
 
