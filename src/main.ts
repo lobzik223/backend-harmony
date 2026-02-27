@@ -54,6 +54,9 @@ async function bootstrap() {
 
   if (env.APP_KEY) {
     app.use((req: any, res: any, next: any) => {
+      // Preflight OPTIONS не шлёт X-Harmony-App-Key — пропускаем, чтобы CORS успел отдать заголовки
+      if (req.method === 'OPTIONS') return next();
+
       const reqPath = (req?.originalUrl || req?.url || '').split('?')[0].replace(/\/$/, '') || '/';
       const healthPath = `/${prefix}/health`;
       const paymentsPath = `/${prefix}/payments`;
