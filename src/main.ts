@@ -40,13 +40,23 @@ async function bootstrap() {
   app.use(json({ limit: BODY_LIMIT }));
   app.use(urlencoded({ extended: true, limit: BODY_LIMIT }));
 
+  const prefix = env.API_PREFIX.replace(/^\//, '');
+  const adminLoginPath = `/${prefix}/admin/login`;
+
+  // Убираем хвостовой слэш у POST /api/admin/login, чтобы Nest точно нашёл маршрут
+  app.use((req: any, res: any, next: any) => {
+    const path = (req?.originalUrl || req?.url || '').split('?')[0].replace(/\/$/, '') || '/';
+    if (req.method === 'POST' && (path === adminLoginPath || path === `${adminLoginPath}/`)) {
+      req.url = adminLoginPath + (req.url?.includes('?') ? '?' + (req.originalUrl || req.url).split('?')[1] : '');
+    }
+    next();
+  });
+
   if (env.APP_KEY) {
     app.use((req: any, res: any, next: any) => {
-      const reqPath = req?.originalUrl || req?.url || '';
-      const prefix = env.API_PREFIX.replace(/^\//, '');
+      const reqPath = (req?.originalUrl || req?.url || '').split('?')[0].replace(/\/$/, '') || '/';
       const healthPath = `/${prefix}/health`;
       const paymentsPath = `/${prefix}/payments`;
-      const adminLoginPath = `/${prefix}/admin/login`;
 
       if (reqPath.startsWith('/uploads') && req.method === 'GET') return next();
       if (reqPath.startsWith(healthPath) && req.method === 'GET') return next();
@@ -79,7 +89,6 @@ async function bootstrap() {
     }),
   );
 
-  const prefix = env.API_PREFIX.replace(/^\//, '');
   app.setGlobalPrefix(prefix);
 
   await app.listen(env.PORT, '0.0.0.0');
