@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
 import helmet from 'helmet';
 import { json, urlencoded } from 'express';
+import { join } from 'path';
 import { AppModule } from './app.module';
 import { env } from './config/env.validation';
 
@@ -44,8 +45,11 @@ async function bootstrap() {
       const prefix = env.API_PREFIX.replace(/^\//, '');
       const healthPath = `/${prefix}/health`;
       const paymentsPath = `/${prefix}/payments`;
+      const adminLoginPath = `/${prefix}/admin/login`;
 
+      if (reqPath.startsWith('/uploads') && req.method === 'GET') return next();
       if (reqPath.startsWith(healthPath) && req.method === 'GET') return next();
+      if (reqPath === adminLoginPath && req.method === 'POST') return next();
       if (reqPath === `${healthPath}/maintenance` && req.method === 'POST') {
         const key = req.headers['x-harmony-app-key'];
         if (key === env.APP_KEY) return next();
@@ -61,6 +65,8 @@ async function bootstrap() {
       return next();
     });
   }
+
+  app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads' });
 
   app.useGlobalPipes(
     new ValidationPipe({

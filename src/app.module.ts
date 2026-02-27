@@ -6,6 +6,8 @@ import { HealthModule } from './modules/health/health.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { PushNotificationsModule } from './modules/push-notifications/push-notifications.module';
+import { ContentModule } from './modules/content/content.module';
+import { AdminModule } from './modules/admin/admin.module';
 import { env } from './config/env.validation';
 
 @Module({
@@ -22,6 +24,8 @@ import { env } from './config/env.validation';
     SubscriptionsModule,
     PaymentsModule,
     PushNotificationsModule,
+    ContentModule,
+    AdminModule,
   ],
 })
 export class AppModule {}

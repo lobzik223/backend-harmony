@@ -80,3 +80,58 @@ model AuthLockout {
   lockedUntil DateTime?
   updatedAt  DateTime  @default(now())
 }
+
+// Админы панели: создаются только из консоли (npm run create-admin). Пароль — хэш argon2.
+model Admin {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
+// --- Контент приложения: секции, треки, статьи (главная) ---
+
+model ContentSection {
+  id        String   @id @default(uuid())
+  name      String   // Название раздела (для админки и приложения)
+  slug      String   @unique // relaxation, inspiration, love, nightmare_exclusion, etc.
+  type      String   // MEDITATION | SLEEP
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tracks ContentTrack[]
+}
+
+model ContentTrack {
+  id              String   @id @default(uuid())
+  sectionId       String
+  title           String
+  descriptionShort String  @default("") // Короткое описание для карточки
+  coverUrl        String?  // URL обложки (/uploads/covers/...)
+  audioUrl        String?  // URL аудио (/uploads/tracks/...)
+  level           String?  // Уровень А/В/С
+  isPremium       Boolean  @default(false)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  section ContentSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  @@index([sectionId])
+}
+
+// Статьи только для главного экрана (блоки: featured, recommended, emergency)
+model Article {
+  id               String    @id @default(uuid())
+  blockType        String    // FEATURED | RECOMMENDED | EMERGENCY
+  title            String
+  descriptionShort String    @default("")
+  descriptionFull  String?   @db.Text
+  imageUrl         String?
+  sortOrder        Int       @default(0)
+  publishedAt      DateTime? @default(now())
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([blockType])
+}

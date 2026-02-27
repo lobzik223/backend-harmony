@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 export interface HealthStatsDto {
   serverOk: boolean;
   dbOk: boolean;
+  totalActiveUsers: number;
   registrationsToday: number;
   registrationsWeek: number;
   registrationsMonth: number;
@@ -16,6 +17,7 @@ export class HealthStatsService {
 
   async getStats(): Promise<HealthStatsDto> {
     let dbOk = false;
+    let totalActiveUsers = 0;
     let registrationsToday = 0;
     let registrationsWeek = 0;
     let registrationsMonth = 0;
@@ -28,6 +30,7 @@ export class HealthStatsService {
       return {
         serverOk: true,
         dbOk: false,
+        totalActiveUsers: 0,
         registrationsToday: 0,
         registrationsWeek: 0,
         registrationsMonth: 0,
@@ -41,7 +44,8 @@ export class HealthStatsService {
     startOfWeek.setDate(startOfWeek.getDate() - 7);
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const [today, week, month, deleted] = await Promise.all([
+    const [total, today, week, month, deleted] = await Promise.all([
+      this.prisma.user.count({ where: { deletedAt: null } }),
       this.prisma.user.count({
         where: { createdAt: { gte: startOfDay }, deletedAt: null },
       }),
@@ -56,6 +60,7 @@ export class HealthStatsService {
       }),
     ]);
 
+    totalActiveUsers = total;
     registrationsToday = today;
     registrationsWeek = week;
     registrationsMonth = month;
@@ -64,6 +69,7 @@ export class HealthStatsService {
     return {
       serverOk: true,
       dbOk,
+      totalActiveUsers,
       registrationsToday,
       registrationsWeek,
       registrationsMonth,

@@ -18,6 +18,10 @@ const envSchema = z
 
     APP_KEY: z.preprocess((v) => (v === '' ? undefined : v), z.string().min(8).optional()),
 
+    /** Секрет для JWT админов панели (отдельно от пользовательского JWT). */
+    ADMIN_JWT_SECRET: z.string().min(32).default('change-me-admin-jwt-secret-min-32-chars'),
+    ADMIN_JWT_TTL_SECONDS: z.coerce.number().int().positive().default(60 * 60 * 8),
+
     DATABASE_URL: z.string().min(1),
 
     GOOGLE_APPLICATION_CREDENTIALS: z.string().optional(),
