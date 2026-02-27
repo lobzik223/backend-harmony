@@ -2,10 +2,10 @@ import { IsString, IsIn, IsInt, Min, IsOptional } from 'class-validator';
 
 export class CreateArticleDto {
   @IsIn(['FEATURED', 'RECOMMENDED', 'EMERGENCY'])
-  blockType: string;
+  blockType!: string;
 
   @IsString()
-  title: string;
+  title!: string;
 
   @IsOptional()
   @IsString()

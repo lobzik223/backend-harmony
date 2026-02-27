@@ -2,10 +2,10 @@ import { IsString, IsBoolean, IsInt, Min, IsOptional } from 'class-validator';
 
 export class CreateTrackDto {
   @IsString()
-  sectionId: string;
+  sectionId!: string;
 
   @IsString()
-  title: string;
+  title!: string;
 
   @IsOptional()
   @IsString()

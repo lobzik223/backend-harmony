@@ -3,6 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
 import helmet from 'helmet';
+import express from 'express';
 import { json, urlencoded } from 'express';
 import { join } from 'path';
 import { AppModule } from './app.module';
@@ -66,7 +67,7 @@ async function bootstrap() {
     });
   }
 
-  app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads' });
+  app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
 
   app.useGlobalPipes(
     new ValidationPipe({

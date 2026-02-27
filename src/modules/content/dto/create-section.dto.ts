@@ -2,13 +2,13 @@ import { IsString, IsIn, IsInt, Min, IsOptional } from 'class-validator';
 
 export class CreateSectionDto {
   @IsString()
-  name: string;
+  name!: string;
 
   @IsString()
-  slug: string;
+  slug!: string;
 
   @IsIn(['MEDITATION', 'SLEEP'])
-  type: string;
+  type!: string;
 
   @IsOptional()
   @IsInt()
