@@ -61,14 +61,14 @@ export class AuthService {
     return v;
   }
 
-  /** Строгая валидация пароля: 8–200 символов, без управляющих символов. */
+  /** Стандартная валидация пароля: от 8 до 128 символов. Без требований к составу. */
   private validatePassword(password: string): void {
     const v = String(password ?? '');
-    if (v.length < 8 || v.length > 200) {
-      throw new BadRequestException('Пароль должен быть от 8 до 200 символов');
+    if (v.length < 8) {
+      throw new BadRequestException('Пароль не короче 8 символов');
     }
-    if (/[\x00-\x1f\x7f]/.test(v)) {
-      throw new BadRequestException('Недопустимые символы в пароле');
+    if (v.length > 128) {
+      throw new BadRequestException('Пароль не длиннее 128 символов');
     }
   }
 

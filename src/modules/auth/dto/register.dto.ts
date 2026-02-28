@@ -25,11 +25,11 @@ export class RegisterDto {
   @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
   email!: string;
 
-  /** Пароль — только для хэширования, в ответы и логи не попадает */
+  /** Пароль — только для хэширования. Стандарт: 8–128 символов. */
   @Exclude()
   @IsString()
   @IsNotEmpty({ message: 'Введите пароль' })
   @MinLength(8, { message: 'Пароль не короче 8 символов' })
-  @MaxLength(200, { message: 'Пароль не длиннее 200 символов' })
+  @MaxLength(128, { message: 'Пароль не длиннее 128 символов' })
   password!: string;
 }
