@@ -39,6 +39,14 @@ const envSchema = z
     ANDROID_PACKAGE_NAME: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
 
     SUPPORT_TELEGRAM_URL: z.string().url().default('https://t.me/harmony_support'),
+
+    /** SMTP для отправки кода подтверждения email при регистрации (noreply@harmonymeditation.online) */
+    SMTP_HOST: z.string().min(1).default('mail.harmonymeditation.online'),
+    SMTP_PORT: z.coerce.number().int().positive().default(587),
+    SMTP_SECURE: z.coerce.boolean().default(false),
+    SMTP_USER: z.string().min(1).default('noreply@harmonymeditation.online'),
+    SMTP_PASS: z.string().default(''),
+    SMTP_FROM: z.string().default('Harmony <noreply@harmonymeditation.online>'),
   })
   .superRefine((v, ctx) => {
     if (v.NODE_ENV === 'production') {

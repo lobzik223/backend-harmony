@@ -81,6 +81,17 @@ model AuthLockout {
   updatedAt  DateTime  @default(now())
 }
 
+// Ожидание подтверждения email при регистрации: код 6 цифр, истекает через 10 мин.
+model PendingRegistration {
+  email         String   @id
+  code          String   // 6 цифр
+  codeExpiresAt DateTime
+  name          String
+  surname       String
+  passwordHash  String
+  createdAt     DateTime @default(now())
+}
+
 // Админы панели: создаются только из консоли (npm run create-admin). Пароль — хэш argon2.
 model Admin {
   id           String   @id @default(uuid())

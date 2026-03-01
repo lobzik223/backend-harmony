@@ -8,6 +8,7 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { RegisterDto } from './dto/register.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { VerifyEmailDto } from './dto/verify-email.dto';
 import { JwtAccessGuard } from './guards/jwt-access.guard';
 import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
 import type { JwtAccessPayload, JwtRefreshPayload } from './types/jwt-payload';
@@ -25,6 +26,17 @@ export class AuthController {
       surname: dto.surname,
       email: dto.email,
       password: dto.password,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+  }
+
+  @Post('verify-email')
+  @Throttle({ default: { limit: 10, ttl: 60 } })
+  verifyEmail(@Body() dto: VerifyEmailDto, @Req() req: Request) {
+    return this.auth.verifyEmail({
+      email: dto.email,
+      code: dto.code,
       ip: req.ip,
       userAgent: req.headers['user-agent'],
     });

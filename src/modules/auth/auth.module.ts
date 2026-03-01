@@ -7,12 +7,14 @@ import { AuthProtectionService } from './auth-protection.service';
 import { JwtAccessStrategy } from './strategies/jwt-access.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
     PassportModule,
     JwtModule.register({}),
     SubscriptionsModule,
+    MailModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, AuthProtectionService, JwtAccessStrategy, JwtRefreshStrategy],

@@ -12,6 +12,7 @@ import * as jwt from 'jsonwebtoken';
 import { PrismaService } from '../prisma/prisma.service';
 import { EntitlementsService, SUBSCRIPTION_NAME_PREMIUM } from '../subscriptions/entitlements.service';
 import { AuthProtectionService } from './auth-protection.service';
+import { MailService } from '../mail/mail.service';
 import { env } from '../../config/env.validation';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import type { JwtAccessPayload, JwtRefreshPayload } from './types/jwt-payload';
@@ -37,6 +38,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly authProtection: AuthProtectionService,
     private readonly entitlementsService: EntitlementsService,
+    private readonly mailService: MailService,
   ) {}
 
   /** Строгая валидация email: формат, длина, запрет управляющих символов. */
@@ -96,9 +98,15 @@ export class AuthService {
     return { accessToken, refreshToken };
   }
 
+  /** Генерация 6-значного кода подтверждения (безопасный случайный). */
+  private generateVerificationCode(): string {
+    const n = crypto.randomInt(0, 1_000_000);
+    return String(n).padStart(6, '0');
+  }
+
   /**
-   * Регистрация. Пароль используется только для вычисления хэша (argon2id);
-   * в БД и ответы попадает только хэш, исходный пароль нигде не сохраняется и не логируется.
+   * Регистрация по email/паролю, шаг 1: отправка 6-значного кода на email.
+   * Аккаунт в БД не создаётся — только запись в PendingRegistration. Аккаунт создаётся в verifyEmail после ввода кода.
    */
   async register(input: {
     name: string;
@@ -131,15 +139,55 @@ export class AuthService {
       parallelism: 1,
     });
 
+    const code = this.generateVerificationCode();
+    const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 минут
+
+    await this.prisma.pendingRegistration.upsert({
+      where: { email },
+      create: { email, code, codeExpiresAt, name, surname, passwordHash },
+      update: { code, codeExpiresAt, name, surname, passwordHash },
+    });
+
+    await this.mailService.sendVerificationCode(email, code);
+    await this.authProtection.clearAuthAttempts(input.ip, email);
+
+    return {
+      message: 'Код отправлен на вашу почту',
+      sent: true,
+    };
+  }
+
+  /**
+   * Регистрация по email/паролю, шаг 2: проверка кода и создание аккаунта в БД. Возвращает токены.
+   * Без успешного verifyEmail аккаунт не создаётся (только для регистрации через форму; Google/Apple — без кода).
+   */
+  async verifyEmail(input: { email: string; code: string; ip?: string; userAgent?: string }) {
+    const email = this.normalizeEmail(input.email);
+    const code = String(input.code).trim();
+
+    const pending = await this.prisma.pendingRegistration.findUnique({
+      where: { email },
+    });
+    if (!pending) {
+      throw new BadRequestException('Код не найден или истёк. Запросите новый код при регистрации.');
+    }
+    if (pending.code !== code) {
+      throw new BadRequestException('Неверный код подтверждения');
+    }
+    if (new Date() > pending.codeExpiresAt) {
+      await this.prisma.pendingRegistration.delete({ where: { email } }).catch(() => {});
+      throw new BadRequestException('Код истёк. Запросите новый код при регистрации.');
+    }
+
     const sessionId = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + env.JWT_REFRESH_TTL_SECONDS * 1000);
 
     const user = await this.prisma.user.create({
       data: {
-        email,
-        name,
-        surname,
-        passwordHash,
+        email: pending.email,
+        name: pending.name,
+        surname: pending.surname,
+        passwordHash: pending.passwordHash,
         premiumUntil: null,
         nameChangeCount: 0,
         refreshSessions: {
@@ -154,8 +202,9 @@ export class AuthService {
       include: { refreshSessions: { where: { id: sessionId } } },
     });
 
-    const tokens = await this.signTokens({ id: user.id, email }, sessionId);
-    await this.authProtection.clearAuthAttempts(input.ip, email);
+    await this.prisma.pendingRegistration.delete({ where: { email } }).catch(() => {});
+
+    const tokens = await this.signTokens({ id: user.id, email: user.email }, sessionId);
 
     return {
       message: 'ok',
@@ -268,6 +317,7 @@ export class AuthService {
     });
 
     if (!user) {
+      // Регистрация через Google: аккаунт создаётся сразу, без подтверждения по коду на почту
       user = await this.prisma.user.create({
         data: {
           email,
@@ -277,6 +327,7 @@ export class AuthService {
           nameChangeCount: 0,
         },
       });
+      await this.prisma.pendingRegistration.deleteMany({ where: { email } }).catch(() => {});
     }
 
     const sessionId = crypto.randomUUID();
@@ -361,6 +412,7 @@ export class AuthService {
     });
 
     if (!user) {
+      // Регистрация через Apple: аккаунт создаётся сразу, без подтверждения по коду на почту
       user = await this.prisma.user.create({
         data: {
           email,
@@ -370,6 +422,7 @@ export class AuthService {
           nameChangeCount: 0,
         },
       });
+      await this.prisma.pendingRegistration.deleteMany({ where: { email } }).catch(() => {});
     }
 
     const sessionId = crypto.randomUUID();
