@@ -148,12 +148,20 @@ export class AuthService {
       update: { code, codeExpiresAt, name, surname, passwordHash },
     });
 
-    await this.mailService.sendVerificationCode(email, code);
+    let sent = false;
+    try {
+      await this.mailService.sendVerificationCode(email, code);
+      sent = true;
+    } catch (err) {
+      this.logger.warn(
+        `Register: sendVerificationCode failed for ${email}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
     await this.authProtection.clearAuthAttempts(input.ip, email);
 
     return {
       message: 'Код отправлен на вашу почту',
-      sent: true,
+      sent,
     };
   }
 

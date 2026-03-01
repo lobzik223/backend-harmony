@@ -49,13 +49,24 @@ export class MailService {
 </html>`;
     const text = `Ваш код подтверждения для регистрации в Harmony: ${code}. Код действителен 10 минут.`;
 
-    await this.getTransporter().sendMail({
-      from: env.SMTP_FROM,
-      to: toEmail,
-      subject: 'Код подтверждения — Harmony',
-      text,
-      html,
-    });
-    this.logger.log(`Verification email sent to ${toEmail}`);
+    try {
+      await this.getTransporter().sendMail({
+        from: env.SMTP_FROM,
+        to: toEmail,
+        subject: 'Код подтверждения — Harmony',
+        text,
+        html,
+      });
+      this.logger.log(`Verification email sent to ${toEmail}`);
+    } catch (err) {
+      this.logger.error(
+        `Failed to send verification email to ${toEmail}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      if (err instanceof Error && err.stack) {
+        this.logger.debug(err.stack);
+      }
+      // Не пробрасываем ошибку — регистрация не должна падать с 500 из‑за SMTP.
+      // Код уже сохранён в БД, пользователь может запросить повторную отправку позже.
+    }
   }
 }
