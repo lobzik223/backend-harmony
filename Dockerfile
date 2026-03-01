@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 # Harmony backend (NestJS + PostgreSQL), Node 20 LTS
 
 # ---- Builder ----
