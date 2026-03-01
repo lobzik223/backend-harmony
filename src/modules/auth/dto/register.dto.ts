@@ -1,5 +1,5 @@
 import { IsEmail, IsNotEmpty, IsString, MaxLength, MinLength } from 'class-validator';
-import { Exclude, Transform } from 'class-transformer';
+import { Transform } from 'class-transformer';
 
 export class RegisterDto {
   /** Имя — обязательно к заполнению */
@@ -26,7 +26,6 @@ export class RegisterDto {
   email!: string;
 
   /** Пароль — только для хэширования. Стандарт: 8–128 символов. */
-  @Exclude()
   @IsString()
   @IsNotEmpty({ message: 'Введите пароль' })
   @MinLength(8, { message: 'Пароль не короче 8 символов' })

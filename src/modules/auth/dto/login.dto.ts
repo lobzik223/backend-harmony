@@ -1,5 +1,5 @@
 import { IsEmail, IsNotEmpty, IsString, MaxLength, MinLength } from 'class-validator';
-import { Exclude, Transform } from 'class-transformer';
+import { Transform } from 'class-transformer';
 
 export class LoginDto {
   @IsEmail({}, { message: 'Введите корректный email' })
@@ -9,7 +9,6 @@ export class LoginDto {
   email!: string;
 
   /** Пароль — только для проверки по хэшу. Стандарт: 8–128 символов. */
-  @Exclude()
   @IsString()
   @IsNotEmpty({ message: 'Введите пароль' })
   @MinLength(8, { message: 'Пароль не короче 8 символов' })
