@@ -1,28 +1,63 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import { env } from '../../config/env.validation';
 
 @Injectable()
-export class MailService {
+export class MailService implements OnModuleInit {
   private readonly logger = new Logger(MailService.name);
   private transporter: nodemailer.Transporter | null = null;
+  private verifyPromise: Promise<boolean> | null = null;
+
+  private createTransporter(): nodemailer.Transporter {
+    if (!env.SMTP_PASS) {
+      this.logger.warn('SMTP_PASS not set — verification emails will not be sent');
+    }
+    const port = env.SMTP_PORT;
+    const secure = env.SMTP_SECURE;
+    const transporter = nodemailer.createTransport({
+      host: env.SMTP_HOST,
+      port,
+      secure,
+      auth:
+        env.SMTP_USER && env.SMTP_PASS
+          ? { user: env.SMTP_USER, pass: env.SMTP_PASS }
+          : undefined,
+      connectionTimeout: 60000,
+      greetingTimeout: 30000,
+      requireTLS: !secure && port === 587,
+      tls: env.SMTP_TLS_INSECURE ? { rejectUnauthorized: false } : undefined,
+    });
+    return transporter;
+  }
 
   private getTransporter(): nodemailer.Transporter {
     if (!this.transporter) {
-      if (!env.SMTP_PASS) {
-        this.logger.warn('SMTP_PASS not set — verification emails will not be sent');
-      }
-      this.transporter = nodemailer.createTransport({
-        host: env.SMTP_HOST,
-        port: env.SMTP_PORT,
-        secure: env.SMTP_SECURE,
-        auth:
-          env.SMTP_USER && env.SMTP_PASS
-            ? { user: env.SMTP_USER, pass: env.SMTP_PASS }
-            : undefined,
-      });
+      this.transporter = this.createTransporter();
     }
     return this.transporter;
+  }
+
+  async onModuleInit(): Promise<void> {
+    this.logger.log(`SMTP config: host=${env.SMTP_HOST} port=${env.SMTP_PORT} secure=${env.SMTP_SECURE} user=${env.SMTP_USER || '(none)'}`);
+    if (!env.SMTP_PASS) {
+      this.logger.warn('SMTP_PASS is empty — verification emails disabled. Set SMTP_PASS in .env to the mailbox password.');
+      return;
+    }
+    this.verifyPromise = this.getTransporter()
+      .verify()
+      .then(() => {
+        this.logger.log('SMTP connection verified successfully');
+        return true;
+      })
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.logger.error(
+          `SMTP connection failed: ${msg}. Check SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS. For self-signed cert try SMTP_TLS_INSECURE=true`,
+        );
+        const code = err && typeof err === 'object' && 'code' in err ? (err as NodeJS.ErrnoException).code : null;
+        if (code) this.logger.error(`SMTP error code: ${code}`);
+        return false;
+      });
   }
 
   /**
@@ -59,14 +94,16 @@ export class MailService {
       });
       this.logger.log(`Verification email sent to ${toEmail}`);
     } catch (err) {
-      this.logger.error(
-        `Failed to send verification email to ${toEmail}: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      const msg = err instanceof Error ? err.message : String(err);
+      const response = err && typeof err === 'object' && 'response' in err ? String((err as { response: string }).response) : '';
+      const suffix = response ? ` | Server: ${response}` : '';
+      this.logger.error(`Failed to send verification email to ${toEmail}: ${msg}${suffix}`);
       if (err instanceof Error && err.stack) {
         this.logger.debug(err.stack);
       }
-      // Не пробрасываем ошибку — регистрация не должна падать с 500 из‑за SMTP.
-      // Код уже сохранён в БД, пользователь может запросить повторную отправку позже.
+      if (msg.includes('certificate') || msg.includes('TLS') || (err as NodeJS.ErrnoException)?.code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE') {
+        this.logger.warn('If your mail server uses a self-signed certificate, set SMTP_TLS_INSECURE=true in .env');
+      }
     }
   }
 }

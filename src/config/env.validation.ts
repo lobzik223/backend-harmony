@@ -40,13 +40,15 @@ const envSchema = z
 
     SUPPORT_TELEGRAM_URL: z.string().url().default('https://t.me/harmony_support'),
 
-    /** SMTP для отправки кода подтверждения email при регистрации (noreply@harmonymeditation.online) */
-    SMTP_HOST: z.string().min(1).default('mail.harmonymeditation.online'),
-    SMTP_PORT: z.coerce.number().int().positive().default(587),
-    SMTP_SECURE: z.coerce.boolean().default(false),
+    /** SMTP для отправки кода подтверждения (Timeweb: smtp.timeweb.ru, порт 465 SSL) */
+    SMTP_HOST: z.string().min(1).default('smtp.timeweb.ru'),
+    SMTP_PORT: z.coerce.number().int().positive().default(465),
+    SMTP_SECURE: z.coerce.boolean().default(true),
     SMTP_USER: z.string().min(1).default('noreply@harmonymeditation.online'),
     SMTP_PASS: z.string().default(''),
     SMTP_FROM: z.string().default('Harmony <noreply@harmonymeditation.online>'),
+    /** true = не проверять сертификат TLS (для серверов с самоподписанным сертификатом). По умолчанию false. */
+    SMTP_TLS_INSECURE: z.preprocess((v) => v === 'true' || v === '1', z.boolean().default(false)),
   })
   .superRefine((v, ctx) => {
     if (v.NODE_ENV === 'production') {
