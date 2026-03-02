@@ -25,6 +25,7 @@ import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 
 const COVER_LIMIT = 5 * 1024 * 1024; // 5 MB
+const ARTICLE_IMAGE_LIMIT = 1 * 1024 * 1024; // 1 MB — только обложки статей (jpg/png)
 const AUDIO_LIMIT = 80 * 1024 * 1024; // 80 MB
 
 @Controller('content')
@@ -163,7 +164,7 @@ export class ContentController {
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
-      limits: { fileSize: COVER_LIMIT },
+      limits: { fileSize: ARTICLE_IMAGE_LIMIT },
       fileFilter: (_req, file, cb) => {
         const ok = ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype);
         cb(null, ok);
@@ -171,7 +172,7 @@ export class ContentController {
     }),
   )
   async uploadArticleImage(@UploadedFile() file: Express.Multer.File) {
-    if (!file) throw new BadRequestException('No file');
+    if (!file) throw new BadRequestException('Файл не выбран');
     const url = await this.content.saveArticleImage(file.buffer, file.mimetype);
     return { url };
   }

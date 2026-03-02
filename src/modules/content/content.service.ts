@@ -44,6 +44,7 @@ export class ContentService {
 
   async saveArticleImage(buffer: Buffer, mime: string): Promise<string> {
     await this.ensureUploadDirs();
+    // jpg, png, webp — все хорошо показываются на iOS и Android
     let ext = '.jpg';
     if (mime === 'image/png') ext = '.png';
     else if (mime === 'image/webp') ext = '.webp';
