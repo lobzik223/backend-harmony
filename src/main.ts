@@ -52,6 +52,7 @@ async function bootstrap() {
     next();
   });
 
+  const appKeyLogger = new Logger('AppKey');
   if (env.APP_KEY) {
     app.use((req: any, res: any, next: any) => {
       // Preflight OPTIONS не шлёт X-Harmony-App-Key — пропускаем, чтобы CORS успел отдать заголовки
@@ -67,6 +68,11 @@ async function bootstrap() {
       if (reqPath === `${healthPath}/maintenance` && req.method === 'POST') {
         const key = req.headers['x-harmony-app-key'];
         if (key === env.APP_KEY) return next();
+        appKeyLogger.warn(`401 path=${reqPath} origin=${req.headers.origin || '-'} keyPresent=${!!key} receivedLen=${key?.length ?? 0} expectedLen=${env.APP_KEY!.length}`);
+        const origin = req.headers.origin;
+        const allowed = corsOrigins === true || (Array.isArray(corsOrigins) && origin && corsOrigins.includes(origin));
+        if (allowed && origin) res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
         return res.status(401).json({ statusCode: 401, message: 'Unauthorized' });
       }
       if (reqPath.startsWith(healthPath)) return next();
@@ -74,6 +80,11 @@ async function bootstrap() {
 
       const key = req.headers['x-harmony-app-key'];
       if (key !== env.APP_KEY) {
+        appKeyLogger.warn(`401 path=${reqPath} origin=${req.headers.origin || '-'} keyPresent=${!!key} receivedLen=${key?.length ?? 0} expectedLen=${env.APP_KEY!.length}`);
+        const origin = req.headers.origin;
+        const allowed = corsOrigins === true || (Array.isArray(corsOrigins) && origin && corsOrigins.includes(origin));
+        if (allowed && origin) res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
         return res.status(401).json({ statusCode: 401, message: 'Unauthorized' });
       }
       return next();
