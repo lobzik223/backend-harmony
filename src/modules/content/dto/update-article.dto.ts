@@ -25,4 +25,12 @@ export class UpdateArticleDto {
   @IsInt()
   @Min(0)
   sortOrder?: number;
+
+  @IsOptional()
+  publishedAt?: string | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  durationMinutes?: number | null;
 }

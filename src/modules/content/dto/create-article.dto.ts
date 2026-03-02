@@ -23,4 +23,12 @@ export class CreateArticleDto {
   @IsInt()
   @Min(0)
   sortOrder?: number;
+
+  @IsOptional()
+  publishedAt?: string; // ISO date
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  durationMinutes?: number;
 }

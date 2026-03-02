@@ -141,6 +141,7 @@ model Article {
   imageUrl         String?
   sortOrder        Int       @default(0)
   publishedAt      DateTime? @default(now())
+  durationMinutes  Int?      // для карточки «8 мин» и т.п.
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 

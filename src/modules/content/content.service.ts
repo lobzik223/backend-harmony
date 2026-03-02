@@ -160,6 +160,7 @@ export class ContentService {
 
   // --- Articles ---
   async createArticle(dto: CreateArticleDto) {
+    const publishedAt = dto.publishedAt ? new Date(dto.publishedAt) : undefined;
     return this.prisma.article.create({
       data: {
         blockType: dto.blockType,
@@ -168,6 +169,8 @@ export class ContentService {
         descriptionFull: dto.descriptionFull ?? null,
         imageUrl: dto.imageUrl ?? null,
         sortOrder: dto.sortOrder ?? 0,
+        ...(publishedAt && { publishedAt }),
+        ...(dto.durationMinutes != null && { durationMinutes: dto.durationMinutes }),
       },
     });
   }
@@ -187,6 +190,9 @@ export class ContentService {
 
   async updateArticle(id: string, dto: UpdateArticleDto) {
     await this.findArticleById(id);
+    const publishedAt = dto.publishedAt !== undefined
+      ? (dto.publishedAt == null ? null : new Date(dto.publishedAt))
+      : undefined;
     return this.prisma.article.update({
       where: { id },
       data: {
@@ -196,6 +202,8 @@ export class ContentService {
         ...(dto.descriptionFull != null && { descriptionFull: dto.descriptionFull }),
         ...(dto.imageUrl != null && { imageUrl: dto.imageUrl }),
         ...(dto.sortOrder != null && { sortOrder: dto.sortOrder }),
+        ...(publishedAt !== undefined && { publishedAt }),
+        ...(dto.durationMinutes !== undefined && { durationMinutes: dto.durationMinutes }),
       },
     });
   }
