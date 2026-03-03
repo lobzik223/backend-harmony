@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSectionDto } from './dto/create-section.dto';
 import { UpdateSectionDto } from './dto/update-section.dto';
@@ -6,6 +6,8 @@ import { CreateTrackDto } from './dto/create-track.dto';
 import { UpdateTrackDto } from './dto/update-track.dto';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
+import { CreateCourseDto } from './dto/create-course.dto';
+import { UpdateCourseDto } from './dto/update-course.dto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -110,6 +112,7 @@ export class ContentService {
         descriptionShort: dto.descriptionShort ?? '',
         coverUrl: dto.coverUrl ?? null,
         audioUrl: dto.audioUrl ?? null,
+        durationSeconds: dto.durationSeconds ?? null,
         level: dto.level ?? null,
         isPremium: dto.isPremium ?? false,
         sortOrder: dto.sortOrder ?? 0,
@@ -147,6 +150,7 @@ export class ContentService {
         ...(dto.descriptionShort != null && { descriptionShort: dto.descriptionShort }),
         ...(dto.coverUrl != null && { coverUrl: dto.coverUrl }),
         ...(dto.audioUrl != null && { audioUrl: dto.audioUrl }),
+        ...(dto.durationSeconds != null && { durationSeconds: dto.durationSeconds }),
         ...(dto.level != null && { level: dto.level }),
         ...(dto.isPremium != null && { isPremium: dto.isPremium }),
         ...(dto.sortOrder != null && { sortOrder: dto.sortOrder }),
@@ -214,25 +218,178 @@ export class ContentService {
     return this.prisma.article.delete({ where: { id } });
   }
 
+  // --- Popular tracks by unique listens ---
+  async recordTrackListen(trackId: string, userId: string) {
+    await this.findTrackById(trackId);
+    await this.prisma.trackListen.upsert({
+      where: { trackId_userId: { trackId, userId } },
+      update: {},
+      create: { trackId, userId },
+    });
+    return { ok: true };
+  }
+
+  async getPopularTracks(limit = 10) {
+    const safeLimit = Math.max(1, Math.min(10, limit));
+    const fromDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const grouped = await this.prisma.trackListen.groupBy({
+      by: ['trackId'],
+      where: { createdAt: { gte: fromDate } },
+      _count: { trackId: true },
+      orderBy: { _count: { trackId: 'desc' } },
+      take: safeLimit,
+    });
+    if (grouped.length === 0) return [];
+    const trackIds = grouped.map((g) => g.trackId);
+    const tracks = await this.prisma.contentTrack.findMany({
+      where: { id: { in: trackIds } },
+      include: { section: { select: { id: true, name: true, slug: true, type: true } } },
+    });
+    const byId = new Map(tracks.map((t) => [t.id, t]));
+    return grouped
+      .map((g) => {
+        const track = byId.get(g.trackId);
+        if (!track) return null;
+        return { ...track, listenCount: g._count.trackId };
+      })
+      .filter((v): v is NonNullable<typeof v> => v != null);
+  }
+
+  // --- Courses ---
+  async createCourse(dto: CreateCourseDto) {
+    const trackIds = Array.from(new Set(dto.trackIds ?? []));
+    if (trackIds.length > 0) {
+      const existing = await this.prisma.contentTrack.findMany({
+        where: { id: { in: trackIds } },
+        select: { id: true },
+      });
+      if (existing.length !== trackIds.length) {
+        throw new BadRequestException('Некоторые треки не найдены');
+      }
+    }
+    return this.prisma.course.create({
+      data: {
+        title: dto.title,
+        descriptionShort: dto.descriptionShort ?? '',
+        descriptionFull: dto.descriptionFull ?? null,
+        imageUrl: dto.imageUrl ?? null,
+        sortOrder: dto.sortOrder ?? 0,
+        isPublished: dto.isPublished ?? true,
+        tracks: {
+          create: trackIds.map((trackId, idx) => ({ trackId, sortOrder: idx })),
+        },
+      },
+      include: {
+        tracks: {
+          orderBy: { sortOrder: 'asc' },
+          include: { track: true },
+        },
+      },
+    });
+  }
+
+  async findCourses(onlyPublished = false) {
+    return this.prisma.course.findMany({
+      where: onlyPublished ? { isPublished: true } : undefined,
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
+      include: {
+        tracks: {
+          orderBy: { sortOrder: 'asc' },
+          include: { track: true },
+        },
+      },
+    });
+  }
+
+  async findCourseById(id: string) {
+    const course = await this.prisma.course.findUnique({
+      where: { id },
+      include: {
+        tracks: {
+          orderBy: { sortOrder: 'asc' },
+          include: { track: true },
+        },
+      },
+    });
+    if (!course) throw new NotFoundException('Course not found');
+    return course;
+  }
+
+  async updateCourse(id: string, dto: UpdateCourseDto) {
+    await this.findCourseById(id);
+    const trackIds = dto.trackIds ? Array.from(new Set(dto.trackIds)) : undefined;
+    if (trackIds && trackIds.length > 0) {
+      const existing = await this.prisma.contentTrack.findMany({
+        where: { id: { in: trackIds } },
+        select: { id: true },
+      });
+      if (existing.length !== trackIds.length) {
+        throw new BadRequestException('Некоторые треки не найдены');
+      }
+    }
+    await this.prisma.course.update({
+      where: { id },
+      data: {
+        ...(dto.title != null && { title: dto.title }),
+        ...(dto.descriptionShort != null && { descriptionShort: dto.descriptionShort }),
+        ...(dto.descriptionFull != null && { descriptionFull: dto.descriptionFull }),
+        ...(dto.imageUrl != null && { imageUrl: dto.imageUrl }),
+        ...(dto.sortOrder != null && { sortOrder: dto.sortOrder }),
+        ...(dto.isPublished != null && { isPublished: dto.isPublished }),
+      },
+    });
+    if (trackIds) {
+      await this.prisma.courseTrack.deleteMany({ where: { courseId: id } });
+      if (trackIds.length > 0) {
+        await this.prisma.courseTrack.createMany({
+          data: trackIds.map((trackId, idx) => ({ courseId: id, trackId, sortOrder: idx })),
+        });
+      }
+    }
+    return this.findCourseById(id);
+  }
+
+  async deleteCourse(id: string) {
+    await this.findCourseById(id);
+    return this.prisma.course.delete({ where: { id } });
+  }
+
   // --- App: home aggregate ---
   async getHome() {
-    const [sections, featured, recommended, emergency] = await Promise.all([
+    const trackSelect = {
+      id: true,
+      title: true,
+      descriptionShort: true,
+      coverUrl: true,
+      audioUrl: true,
+      durationSeconds: true,
+      level: true,
+      isPremium: true,
+      sortOrder: true,
+    };
+    const [sections, featured, recommended, emergency, popularTracks, courses] = await Promise.all([
       this.prisma.contentSection.findMany({
         orderBy: { sortOrder: 'asc' },
         include: {
-          tracks: { orderBy: { sortOrder: 'asc' }, select: { id: true, title: true, descriptionShort: true, coverUrl: true, audioUrl: true, level: true, isPremium: true, sortOrder: true } },
+          tracks: { orderBy: { sortOrder: 'asc' }, select: trackSelect },
         },
       }),
       this.prisma.article.findFirst({ where: { blockType: 'FEATURED' }, orderBy: { sortOrder: 'asc' } }),
       this.prisma.article.findMany({ where: { blockType: 'RECOMMENDED' }, orderBy: { sortOrder: 'asc' } }),
       this.prisma.article.findMany({ where: { blockType: 'EMERGENCY' }, orderBy: { sortOrder: 'asc' } }),
+      this.getPopularTracks(10),
+      this.findCourses(true),
     ]);
+    const homeSections = sections.filter((s) => s.type === 'HOME');
     return {
       sections,
+      homeSections,
       home: {
         featured: featured ?? null,
         recommended: recommended ?? [],
         emergency: emergency ?? [],
+        popularTracks: popularTracks ?? [],
+        courses: courses ?? [],
       },
     };
   }

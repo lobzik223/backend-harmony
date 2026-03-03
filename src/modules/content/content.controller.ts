@@ -11,11 +11,13 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  Req,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { extname } from 'node:path';
 import { AdminJwtGuard } from '../admin/guards/admin-jwt.guard';
+import { JwtAccessGuard } from '../auth/guards/jwt-access.guard';
 import { ContentService } from './content.service';
 import { CreateSectionDto } from './dto/create-section.dto';
 import { UpdateSectionDto } from './dto/update-section.dto';
@@ -23,6 +25,8 @@ import { CreateTrackDto } from './dto/create-track.dto';
 import { UpdateTrackDto } from './dto/update-track.dto';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
+import { CreateCourseDto } from './dto/create-course.dto';
+import { UpdateCourseDto } from './dto/update-course.dto';
 
 const COVER_LIMIT = 5 * 1024 * 1024; // 5 MB
 const ARTICLE_IMAGE_LIMIT = 1 * 1024 * 1024; // 1 MB — только обложки статей (jpg/png)
@@ -52,6 +56,19 @@ export class ContentController {
     return this.content.findArticles(blockType);
   }
 
+  @Get('popular-tracks')
+  getPopularTracks(@Query('limit') limit?: string) {
+    const n = Number(limit ?? 10);
+    const safe = Number.isFinite(n) ? n : 10;
+    return this.content.getPopularTracks(safe);
+  }
+
+  @Get('courses')
+  getCourses(@Query('published') published?: string) {
+    const onlyPublished = published === '1' || published === 'true';
+    return this.content.findCourses(onlyPublished);
+  }
+
   @Get('sections/:id')
   getSection(@Param('id') id: string) {
     return this.content.findSectionById(id);
@@ -65,6 +82,11 @@ export class ContentController {
   @Get('articles/:id')
   getArticle(@Param('id') id: string) {
     return this.content.findArticleById(id);
+  }
+
+  @Get('courses/:id')
+  getCourse(@Param('id') id: string) {
+    return this.content.findCourseById(id);
   }
 
   @Post('sections')
@@ -121,6 +143,32 @@ export class ContentController {
     return this.content.deleteArticle(id);
   }
 
+  @Post('tracks/:id/listen')
+  @UseGuards(JwtAccessGuard)
+  registerTrackListen(@Param('id') id: string, @Req() req: { user?: { sub?: string } }) {
+    const userId = req?.user?.sub;
+    if (!userId) throw new BadRequestException('userId required');
+    return this.content.recordTrackListen(id, userId);
+  }
+
+  @Post('courses')
+  @UseGuards(AdminJwtGuard)
+  createCourse(@Body() dto: CreateCourseDto) {
+    return this.content.createCourse(dto);
+  }
+
+  @Patch('courses/:id')
+  @UseGuards(AdminJwtGuard)
+  updateCourse(@Param('id') id: string, @Body() dto: UpdateCourseDto) {
+    return this.content.updateCourse(id, dto);
+  }
+
+  @Delete('courses/:id')
+  @UseGuards(AdminJwtGuard)
+  deleteCourse(@Param('id') id: string) {
+    return this.content.deleteCourse(id);
+  }
+
   @Post('upload/cover')
   @UseGuards(AdminJwtGuard)
   @UseInterceptors(
@@ -156,7 +204,7 @@ export class ContentController {
     if (!file) throw new BadRequestException('No file');
     const ext = file.originalname ? extname(file.originalname) : '.mp3';
     const url = await this.content.saveTrackAudio(file.buffer, ext);
-    return { url };
+    return { url, size: file.buffer.length };
   }
 
   @Post('upload/article-image')

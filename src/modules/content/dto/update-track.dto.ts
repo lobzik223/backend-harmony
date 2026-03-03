@@ -33,4 +33,9 @@ export class UpdateTrackDto {
   @IsInt()
   @Min(0)
   sortOrder?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  durationSeconds?: number;
 }

@@ -23,6 +23,7 @@ model User {
   devices         Device[]
   subscription    Subscription?
   yookassaPayments YookassaPayment[]
+  trackListens    TrackListen[]
 }
 
 model RefreshSession {
@@ -106,7 +107,7 @@ model ContentSection {
   id        String   @id @default(uuid())
   name      String   // Название раздела (для админки и приложения)
   slug      String   @unique // relaxation, inspiration, love, nightmare_exclusion, etc.
-  type      String   // MEDITATION | SLEEP
+  type      String   // MEDITATION | SLEEP | HOME (Гармония, Расслабление, Осознанность, Энергия)
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -121,6 +122,7 @@ model ContentTrack {
   descriptionShort String  @default("") // Короткое описание для карточки
   coverUrl        String?  // URL обложки (/uploads/covers/...)
   audioUrl        String?  // URL аудио (/uploads/tracks/...)
+  durationSeconds Int?     // Длительность в секундах (для отображения "N мин")
   level           String?  // Уровень А/В/С
   isPremium       Boolean  @default(false)
   sortOrder       Int      @default(0)
@@ -128,6 +130,8 @@ model ContentTrack {
   updatedAt       DateTime @updatedAt
 
   section ContentSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  listens TrackListen[]
+  courseTracks CourseTrack[]
   @@index([sectionId])
 }
 
@@ -146,4 +150,50 @@ model Article {
   updatedAt        DateTime  @updatedAt
 
   @@index([blockType])
+}
+
+// Уникальное прослушивание трека: один пользователь = один учтённый просмотр трека.
+model TrackListen {
+  id        String   @id @default(uuid())
+  trackId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  track ContentTrack @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  user  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([trackId, userId])
+  @@index([trackId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// Курс: карточка с обложкой/описанием и набором треков.
+model Course {
+  id               String    @id @default(uuid())
+  title            String
+  descriptionShort String    @default("")
+  descriptionFull  String?   @db.Text
+  imageUrl         String?
+  sortOrder        Int       @default(0)
+  isPublished      Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  tracks CourseTrack[]
+}
+
+model CourseTrack {
+  id        String   @id @default(uuid())
+  courseId  String
+  trackId   String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  course Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  track  ContentTrack @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, trackId])
+  @@index([courseId, sortOrder])
+  @@index([trackId])
 }
