@@ -28,6 +28,8 @@ services:
     container_name: harmony_backend
     ports:
       - "3000:3000"
+    volumes:
+      - harmony_uploads:/app/uploads
     env_file:
       - .env
     environment:
@@ -53,3 +55,4 @@ services:
 
 volumes:
   harmony_pgdata:
+  harmony_uploads:

@@ -25,7 +25,7 @@ FROM node:20-alpine AS production
 
 WORKDIR /app
 
-RUN apk add --no-cache dumb-init tzdata ca-certificates && \
+RUN apk add --no-cache dumb-init tzdata ca-certificates su-exec && \
     addgroup -g 1001 -S nodejs && \
     adduser -S nestjs -u 1001 -G nodejs
 
@@ -48,8 +48,7 @@ COPY docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
 
 RUN chown -R nestjs:nodejs /app
-
-USER nestjs
+# entrypoint запускается от root, чтобы создавать uploads и менять владельца тома
 
 EXPOSE 3000
 
