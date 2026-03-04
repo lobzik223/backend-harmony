@@ -204,7 +204,17 @@ export class ContentController {
     if (!file) throw new BadRequestException('No file');
     const ext = file.originalname ? extname(file.originalname) : '.mp3';
     const url = await this.content.saveTrackAudio(file.buffer, ext);
-    return { url, size: file.buffer.length };
+    let durationSeconds: number | undefined;
+    try {
+      const { parseBuffer } = await import('music-metadata');
+      const metadata = await parseBuffer(file.buffer, { mimeType: file.mimetype }, { duration: true });
+      if (metadata.format?.duration != null && metadata.format.duration > 0) {
+        durationSeconds = Math.round(metadata.format.duration);
+      }
+    } catch {
+      // не удалось прочитать длительность — оставляем undefined
+    }
+    return { url, size: file.buffer.length, durationSeconds };
   }
 
   @Post('upload/article-image')

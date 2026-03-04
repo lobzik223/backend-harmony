@@ -8,7 +8,7 @@ import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -17,6 +17,17 @@ const UPLOAD_DIR = process.cwd() + '/uploads';
 @Injectable()
 export class ContentService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private async deleteUploadFileIfExists(url?: string | null) {
+    if (!url?.startsWith('/uploads/')) return;
+    const relativePath = url.replace(/^\//, '');
+    const fullPath = join(process.cwd(), relativePath);
+    try {
+      await unlink(fullPath);
+    } catch {
+      // файл уже удален или отсутствует — пропускаем
+    }
+  }
 
   private async ensureUploadDirs() {
     await mkdir(join(UPLOAD_DIR, 'covers'), { recursive: true });
@@ -99,7 +110,13 @@ export class ContentService {
   }
 
   async deleteSection(id: string) {
-    await this.findSectionById(id);
+    const section = await this.findSectionById(id);
+    await Promise.all(
+      (section.tracks ?? []).flatMap((track) => [
+        this.deleteUploadFileIfExists(track.coverUrl),
+        this.deleteUploadFileIfExists(track.audioUrl),
+      ]),
+    );
     return this.prisma.contentSection.delete({ where: { id } });
   }
 
@@ -141,8 +158,8 @@ export class ContentService {
   }
 
   async updateTrack(id: string, dto: UpdateTrackDto) {
-    await this.findTrackById(id);
-    return this.prisma.contentTrack.update({
+    const existing = await this.findTrackById(id);
+    const updated = await this.prisma.contentTrack.update({
       where: { id },
       data: {
         ...(dto.sectionId != null && { sectionId: dto.sectionId }),
@@ -156,11 +173,23 @@ export class ContentService {
         ...(dto.sortOrder != null && { sortOrder: dto.sortOrder }),
       },
     });
+    if (dto.coverUrl && dto.coverUrl !== existing.coverUrl) {
+      await this.deleteUploadFileIfExists(existing.coverUrl);
+    }
+    if (dto.audioUrl && dto.audioUrl !== existing.audioUrl) {
+      await this.deleteUploadFileIfExists(existing.audioUrl);
+    }
+    return updated;
   }
 
   async deleteTrack(id: string) {
-    await this.findTrackById(id);
-    return this.prisma.contentTrack.delete({ where: { id } });
+    const track = await this.findTrackById(id);
+    const deleted = await this.prisma.contentTrack.delete({ where: { id } });
+    await Promise.all([
+      this.deleteUploadFileIfExists(track.coverUrl),
+      this.deleteUploadFileIfExists(track.audioUrl),
+    ]);
+    return deleted;
   }
 
   // --- Articles ---
