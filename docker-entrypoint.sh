@@ -3,7 +3,7 @@ set -e
 cd /app
 
 # Папки для загрузок (том uploads может быть с правами root — создаём и отдаём nestjs)
-mkdir -p uploads/covers uploads/tracks uploads/articles
+mkdir -p uploads/covers uploads/tracks uploads/articles uploads/course-tracks
 chown -R 1001:1001 uploads 2>/dev/null || true
 
 # Миграции при каждом старте/пересборке (идемпотентно)

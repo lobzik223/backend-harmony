@@ -1,4 +1,31 @@
-import { IsArray, IsBoolean, IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsInt,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+  MinLength,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class UpdateCourseTrackItemDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(200)
+  title!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  descriptionShort?: string;
+
+  @IsString()
+  @MinLength(1)
+  mediaUrl!: string;
+}
 
 export class UpdateCourseDto {
   @IsOptional()
@@ -32,6 +59,7 @@ export class UpdateCourseDto {
 
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
-  trackIds?: string[];
+  @ValidateNested({ each: true })
+  @Type(() => UpdateCourseTrackItemDto)
+  tracks?: UpdateCourseTrackItemDto[];
 }

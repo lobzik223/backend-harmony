@@ -33,6 +33,27 @@ export class ContentService {
     await mkdir(join(UPLOAD_DIR, 'covers'), { recursive: true });
     await mkdir(join(UPLOAD_DIR, 'tracks'), { recursive: true });
     await mkdir(join(UPLOAD_DIR, 'articles'), { recursive: true });
+    await mkdir(join(UPLOAD_DIR, 'course-tracks'), { recursive: true });
+  }
+
+  private static readonly COURSE_TRACK_MAX_SIZE = 200 * 1024 * 1024; // 200 MB
+  private static readonly COURSE_TRACK_ALLOWED_EXT = ['.mp4', '.m4a', '.mp3', '.wav', '.ogg', '.webm'];
+
+  async saveCourseTrackMedia(buffer: Buffer, ext: string): Promise<string> {
+    if (buffer.length > ContentService.COURSE_TRACK_MAX_SIZE) {
+      throw new BadRequestException(`Файл превышает 200 МБ. Размер: ${Math.round(buffer.length / 1024 / 1024)} МБ`);
+    }
+    const extLower = ext.toLowerCase();
+    if (!ContentService.COURSE_TRACK_ALLOWED_EXT.includes(extLower)) {
+      throw new BadRequestException(
+        `Недопустимый формат. Разрешены: ${ContentService.COURSE_TRACK_ALLOWED_EXT.join(', ')}`,
+      );
+    }
+    await this.ensureUploadDirs();
+    const name = `${randomUUID()}${extLower}`;
+    const path = join(UPLOAD_DIR, 'course-tracks', name);
+    await writeFile(path, buffer);
+    return `/uploads/course-tracks/${name}`;
   }
 
   async saveCover(buffer: Buffer, mime: string): Promise<string> {
@@ -286,15 +307,9 @@ export class ContentService {
 
   // --- Courses ---
   async createCourse(dto: CreateCourseDto) {
-    const trackIds = Array.from(new Set(dto.trackIds ?? []));
-    if (trackIds.length > 0) {
-      const existing = await this.prisma.contentTrack.findMany({
-        where: { id: { in: trackIds } },
-        select: { id: true },
-      });
-      if (existing.length !== trackIds.length) {
-        throw new BadRequestException('Некоторые треки не найдены');
-      }
+    const tracks = dto.tracks ?? [];
+    if (tracks.length > 10) {
+      throw new BadRequestException('Максимум 10 треков в курсе');
     }
     return this.prisma.course.create({
       data: {
@@ -304,15 +319,17 @@ export class ContentService {
         imageUrl: dto.imageUrl ?? null,
         sortOrder: dto.sortOrder ?? 0,
         isPublished: dto.isPublished ?? true,
-        tracks: {
-          create: trackIds.map((trackId, idx) => ({ trackId, sortOrder: idx })),
+        courseTrackItems: {
+          create: tracks.map((t, idx) => ({
+            title: t.title,
+            descriptionShort: t.descriptionShort ?? '',
+            mediaUrl: t.mediaUrl,
+            sortOrder: idx,
+          })),
         },
       },
       include: {
-        tracks: {
-          orderBy: { sortOrder: 'asc' },
-          include: { track: true },
-        },
+        courseTrackItems: { orderBy: { sortOrder: 'asc' } },
       },
     });
   }
@@ -322,10 +339,7 @@ export class ContentService {
       where: onlyPublished ? { isPublished: true } : undefined,
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
       include: {
-        tracks: {
-          orderBy: { sortOrder: 'asc' },
-          include: { track: true },
-        },
+        courseTrackItems: { orderBy: { sortOrder: 'asc' } },
       },
     });
   }
@@ -334,10 +348,7 @@ export class ContentService {
     const course = await this.prisma.course.findUnique({
       where: { id },
       include: {
-        tracks: {
-          orderBy: { sortOrder: 'asc' },
-          include: { track: true },
-        },
+        courseTrackItems: { orderBy: { sortOrder: 'asc' } },
       },
     });
     if (!course) throw new NotFoundException('Course not found');
@@ -345,15 +356,29 @@ export class ContentService {
   }
 
   async updateCourse(id: string, dto: UpdateCourseDto) {
-    await this.findCourseById(id);
-    const trackIds = dto.trackIds ? Array.from(new Set(dto.trackIds)) : undefined;
-    if (trackIds && trackIds.length > 0) {
-      const existing = await this.prisma.contentTrack.findMany({
-        where: { id: { in: trackIds } },
-        select: { id: true },
-      });
-      if (existing.length !== trackIds.length) {
-        throw new BadRequestException('Некоторые треки не найдены');
+    const course = await this.findCourseById(id);
+    const tracks = dto.tracks;
+    if (tracks !== undefined) {
+      if (tracks.length > 10) {
+        throw new BadRequestException('Максимум 10 треков в курсе');
+      }
+      const oldItems = course.courseTrackItems ?? [];
+      await this.prisma.courseTrackItem.deleteMany({ where: { courseId: id } });
+      for (const old of oldItems) {
+        if (old.mediaUrl?.startsWith('/uploads/course-tracks/')) {
+          await this.deleteUploadFileIfExists(old.mediaUrl);
+        }
+      }
+      if (tracks.length > 0) {
+        await this.prisma.courseTrackItem.createMany({
+          data: tracks.map((t, idx) => ({
+            courseId: id,
+            title: t.title,
+            descriptionShort: t.descriptionShort ?? '',
+            mediaUrl: t.mediaUrl,
+            sortOrder: idx,
+          })),
+        });
       }
     }
     await this.prisma.course.update({
@@ -367,19 +392,16 @@ export class ContentService {
         ...(dto.isPublished != null && { isPublished: dto.isPublished }),
       },
     });
-    if (trackIds) {
-      await this.prisma.courseTrack.deleteMany({ where: { courseId: id } });
-      if (trackIds.length > 0) {
-        await this.prisma.courseTrack.createMany({
-          data: trackIds.map((trackId, idx) => ({ courseId: id, trackId, sortOrder: idx })),
-        });
-      }
-    }
     return this.findCourseById(id);
   }
 
   async deleteCourse(id: string) {
-    await this.findCourseById(id);
+    const course = await this.findCourseById(id);
+    for (const item of course.courseTrackItems ?? []) {
+      if (item.mediaUrl?.startsWith('/uploads/course-tracks/')) {
+        await this.deleteUploadFileIfExists(item.mediaUrl);
+      }
+    }
     return this.prisma.course.delete({ where: { id } });
   }
 
@@ -410,6 +432,19 @@ export class ContentService {
       this.findCourses(true),
     ]);
     const homeSections = sections.filter((s) => s.type === 'HOME');
+    const coursesForApp = (courses ?? []).map((c) => ({
+      ...c,
+      tracks: (c.courseTrackItems ?? []).map((item) => ({
+        track: {
+          id: item.id,
+          coverUrl: c.imageUrl,
+          title: item.title,
+          descriptionShort: item.descriptionShort,
+          isPremium: false,
+          audioUrl: item.mediaUrl,
+        },
+      })),
+    }));
     return {
       sections,
       homeSections,
@@ -418,7 +453,7 @@ export class ContentService {
         recommended: recommended ?? [],
         emergency: emergency ?? [],
         popularTracks: popularTracks ?? [],
-        courses: courses ?? [],
+        courses: coursesForApp,
       },
     };
   }

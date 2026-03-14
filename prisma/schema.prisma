@@ -131,7 +131,6 @@ model ContentTrack {
 
   section ContentSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   listens TrackListen[]
-  courseTracks CourseTrack[]
   @@index([sectionId])
 }
 
@@ -168,7 +167,7 @@ model TrackListen {
   @@index([createdAt])
 }
 
-// Курс: карточка с обложкой/описанием и набором треков.
+// Курс: карточка с обложкой/описанием и набором треков (загружаемых админом).
 model Course {
   id               String    @id @default(uuid())
   title            String
@@ -180,20 +179,19 @@ model Course {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  tracks CourseTrack[]
+  courseTrackItems CourseTrackItem[]
 }
 
-model CourseTrack {
-  id        String   @id @default(uuid())
-  courseId  String
-  trackId   String
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
+model CourseTrackItem {
+  id               String   @id @default(uuid())
+  courseId         String
+  title            String
+  descriptionShort String   @default("")
+  mediaUrl         String
+  sortOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
 
-  course Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  track  ContentTrack @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
-  @@unique([courseId, trackId])
   @@index([courseId, sortOrder])
-  @@index([trackId])
 }

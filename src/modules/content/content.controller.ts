@@ -31,6 +31,7 @@ import { UpdateCourseDto } from './dto/update-course.dto';
 const COVER_LIMIT = 5 * 1024 * 1024; // 5 MB
 const ARTICLE_IMAGE_LIMIT = 1 * 1024 * 1024; // 1 MB — только обложки статей (jpg/png)
 const AUDIO_LIMIT = 80 * 1024 * 1024; // 80 MB
+const COURSE_TRACK_LIMIT = 200 * 1024 * 1024; // 200 MB — треки курса (mp4, m4a, mp3 и т.д.)
 
 @Controller('content')
 export class ContentController {
@@ -233,5 +234,36 @@ export class ContentController {
     if (!file) throw new BadRequestException('Файл не выбран');
     const url = await this.content.saveArticleImage(file.buffer, file.mimetype);
     return { url };
+  }
+
+  @Post('upload/course-track')
+  @UseGuards(AdminJwtGuard)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: COURSE_TRACK_LIMIT },
+      fileFilter: (_req, file, cb) => {
+        const ok =
+          [
+            'audio/mpeg',
+            'audio/mp3',
+            'audio/m4a',
+            'audio/wav',
+            'audio/ogg',
+            'audio/x-wav',
+            'audio/webm',
+            'video/mp4',
+            'video/webm',
+          ].includes(file.mimetype) ||
+          file.originalname?.toLowerCase().match(/\.(mp4|m4a|mp3|wav|ogg|webm)$/);
+        cb(null, !!ok);
+      },
+    }),
+  )
+  async uploadCourseTrack(@UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('Файл не выбран');
+    const ext = file.originalname ? extname(file.originalname) : '.mp3';
+    const url = await this.content.saveCourseTrackMedia(file.buffer, ext);
+    return { url, size: file.buffer.length };
   }
 }
