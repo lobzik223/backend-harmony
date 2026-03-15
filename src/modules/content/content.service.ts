@@ -108,6 +108,29 @@ export class ContentService {
     });
   }
 
+  async findSectionsWithTracks(type?: string) {
+    return this.prisma.contentSection.findMany({
+      where: type ? { type } : undefined,
+      orderBy: { sortOrder: 'asc' },
+      include: {
+        tracks: {
+          orderBy: { sortOrder: 'asc' },
+          select: {
+            id: true,
+            title: true,
+            descriptionShort: true,
+            coverUrl: true,
+            audioUrl: true,
+            durationSeconds: true,
+            level: true,
+            isPremium: true,
+            sortOrder: true,
+          },
+        },
+      },
+    });
+  }
+
   async findSectionById(id: string) {
     const s = await this.prisma.contentSection.findUnique({
       where: { id },

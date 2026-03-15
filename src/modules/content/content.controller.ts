@@ -42,6 +42,11 @@ export class ContentController {
     return this.content.findAllSections(type);
   }
 
+  @Get('sections-with-tracks')
+  getSectionsWithTracks(@Query('type') type?: string) {
+    return this.content.findSectionsWithTracks(type);
+  }
+
   @Get('tracks')
   getTracks(@Query('sectionId') sectionId?: string, @Query('type') type?: string) {
     return this.content.findTracks(sectionId, type);
