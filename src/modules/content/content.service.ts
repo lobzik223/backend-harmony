@@ -34,6 +34,29 @@ export class ContentService {
     await mkdir(join(UPLOAD_DIR, 'tracks'), { recursive: true });
     await mkdir(join(UPLOAD_DIR, 'articles'), { recursive: true });
     await mkdir(join(UPLOAD_DIR, 'course-tracks'), { recursive: true });
+    await mkdir(join(UPLOAD_DIR, 'videos'), { recursive: true });
+  }
+
+  private static readonly VIDEO_MAX_SIZE = 300 * 1024 * 1024; // 300 MB
+  private static readonly VIDEO_ALLOWED_EXT = ['.mp4', '.webm', '.m4v']; // Android + iOS
+
+  async saveVideo(buffer: Buffer, ext: string): Promise<string> {
+    if (buffer.length > ContentService.VIDEO_MAX_SIZE) {
+      throw new BadRequestException(
+        `Видео превышает 300 МБ. Размер: ${Math.round(buffer.length / 1024 / 1024)} МБ`,
+      );
+    }
+    const extLower = ext.toLowerCase();
+    if (!ContentService.VIDEO_ALLOWED_EXT.includes(extLower)) {
+      throw new BadRequestException(
+        `Недопустимый формат видео. Разрешены: ${ContentService.VIDEO_ALLOWED_EXT.join(', ')} (mp4, webm для Android и iOS)`,
+      );
+    }
+    await this.ensureUploadDirs();
+    const name = `${randomUUID()}${extLower}`;
+    const path = join(UPLOAD_DIR, 'videos', name);
+    await writeFile(path, buffer);
+    return `/uploads/videos/${name}`;
   }
 
   private static readonly COURSE_TRACK_MAX_SIZE = 200 * 1024 * 1024; // 200 MB
@@ -95,6 +118,7 @@ export class ContentService {
         name: dto.name,
         slug: dto.slug,
         type: dto.type,
+        cardType: dto.cardType ?? 'TRACKS',
         sortOrder: dto.sortOrder ?? 0,
       },
     });
@@ -121,6 +145,8 @@ export class ContentService {
             descriptionShort: true,
             coverUrl: true,
             audioUrl: true,
+            videoUrl: true,
+            mediaType: true,
             durationSeconds: true,
             level: true,
             isPremium: true,
@@ -148,6 +174,7 @@ export class ContentService {
         ...(dto.name != null && { name: dto.name }),
         ...(dto.slug != null && { slug: dto.slug }),
         ...(dto.type != null && { type: dto.type }),
+        ...(dto.cardType != null && { cardType: dto.cardType }),
         ...(dto.sortOrder != null && { sortOrder: dto.sortOrder }),
       },
     });
@@ -159,6 +186,7 @@ export class ContentService {
       (section.tracks ?? []).flatMap((track) => [
         this.deleteUploadFileIfExists(track.coverUrl),
         this.deleteUploadFileIfExists(track.audioUrl),
+        this.deleteUploadFileIfExists((track as { videoUrl?: string }).videoUrl),
       ]),
     );
     return this.prisma.contentSection.delete({ where: { id } });
@@ -173,6 +201,8 @@ export class ContentService {
         descriptionShort: dto.descriptionShort ?? '',
         coverUrl: dto.coverUrl ?? null,
         audioUrl: dto.audioUrl ?? null,
+        videoUrl: dto.videoUrl ?? null,
+        mediaType: (dto.mediaType as 'AUDIO' | 'VIDEO') ?? (dto.videoUrl ? 'VIDEO' : 'AUDIO'),
         durationSeconds: dto.durationSeconds ?? null,
         level: dto.level ?? null,
         isPremium: dto.isPremium ?? false,
@@ -211,6 +241,8 @@ export class ContentService {
         ...(dto.descriptionShort != null && { descriptionShort: dto.descriptionShort }),
         ...(dto.coverUrl != null && { coverUrl: dto.coverUrl }),
         ...(dto.audioUrl != null && { audioUrl: dto.audioUrl }),
+        ...(dto.videoUrl != null && { videoUrl: dto.videoUrl }),
+        ...(dto.mediaType != null && { mediaType: dto.mediaType }),
         ...(dto.durationSeconds != null && { durationSeconds: dto.durationSeconds }),
         ...(dto.level != null && { level: dto.level }),
         ...(dto.isPremium != null && { isPremium: dto.isPremium }),
@@ -223,6 +255,9 @@ export class ContentService {
     if (dto.audioUrl && dto.audioUrl !== existing.audioUrl) {
       await this.deleteUploadFileIfExists(existing.audioUrl);
     }
+    if (dto.videoUrl && dto.videoUrl !== (existing as { videoUrl?: string }).videoUrl) {
+      await this.deleteUploadFileIfExists((existing as { videoUrl?: string }).videoUrl);
+    }
     return updated;
   }
 
@@ -232,6 +267,7 @@ export class ContentService {
     await Promise.all([
       this.deleteUploadFileIfExists(track.coverUrl),
       this.deleteUploadFileIfExists(track.audioUrl),
+      this.deleteUploadFileIfExists((track as { videoUrl?: string }).videoUrl),
     ]);
     return deleted;
   }
@@ -436,6 +472,8 @@ export class ContentService {
       descriptionShort: true,
       coverUrl: true,
       audioUrl: true,
+      videoUrl: true,
+      mediaType: true,
       durationSeconds: true,
       level: true,
       isPremium: true,

@@ -32,6 +32,7 @@ const COVER_LIMIT = 5 * 1024 * 1024; // 5 MB
 const ARTICLE_IMAGE_LIMIT = 1 * 1024 * 1024; // 1 MB — только обложки статей (jpg/png)
 const AUDIO_LIMIT = 80 * 1024 * 1024; // 80 MB
 const COURSE_TRACK_LIMIT = 200 * 1024 * 1024; // 200 MB — треки курса (mp4, m4a, mp3 и т.д.)
+const VIDEO_LIMIT = 300 * 1024 * 1024; // 300 MB — видео для секций (mp4, webm для Android/iOS)
 
 @Controller('content')
 export class ContentController {
@@ -239,6 +240,27 @@ export class ContentController {
     if (!file) throw new BadRequestException('Файл не выбран');
     const url = await this.content.saveArticleImage(file.buffer, file.mimetype);
     return { url };
+  }
+
+  @Post('upload/video')
+  @UseGuards(AdminJwtGuard)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: VIDEO_LIMIT },
+      fileFilter: (_req, file, cb) => {
+        const ok =
+          ['video/mp4', 'video/webm', 'video/x-m4v'].includes(file.mimetype) ||
+          file.originalname?.toLowerCase().match(/\.(mp4|webm|m4v)$/);
+        cb(null, !!ok);
+      },
+    }),
+  )
+  async uploadVideo(@UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('Файл не выбран');
+    const ext = file.originalname ? extname(file.originalname) : '.mp4';
+    const url = await this.content.saveVideo(file.buffer, ext);
+    return { url, size: file.buffer.length };
   }
 
   @Post('upload/course-track')

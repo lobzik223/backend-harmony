@@ -108,11 +108,13 @@ model ContentSection {
   name      String   // Название раздела (для админки и приложения)
   slug      String   @unique // relaxation, inspiration, love, nightmare_exclusion, etc.
   type      String   // MEDITATION | SLEEP | HOME (Гармония, Расслабление, Осознанность, Энергия)
+  cardType  String   @default("TRACKS") // STATIC (статьи как О силе мышления) | TRACKS (аудио) | VIDEO (видео)
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tracks ContentTrack[]
+  tracks  ContentTrack[]
+  articles Article[]
 }
 
 model ContentTrack {
@@ -122,6 +124,8 @@ model ContentTrack {
   descriptionShort String  @default("") // Короткое описание для карточки
   coverUrl        String?  // URL обложки (/uploads/covers/...)
   audioUrl        String?  // URL аудио (/uploads/tracks/...)
+  videoUrl        String?  // URL видео (/uploads/videos/...) — mp4, webm для Android/iOS
+  mediaType       String   @default("AUDIO") // AUDIO | VIDEO
   durationSeconds Int?     // Длительность в секундах (для отображения "N мин")
   level           String?  // Уровень А/В/С
   isPremium       Boolean  @default(false)
@@ -134,10 +138,11 @@ model ContentTrack {
   @@index([sectionId])
 }
 
-// Статьи только для главного экрана (блоки: featured, recommended, emergency)
+// Статьи: главный экран (featured, recommended, emergency) или секции (sectionId)
 model Article {
   id               String    @id @default(uuid())
-  blockType        String    // FEATURED | RECOMMENDED | EMERGENCY
+  blockType        String    // FEATURED | RECOMMENDED | EMERGENCY | SECTION (для секций cardType=STATIC)
+  sectionId        String?   // Привязка к секции (cardType=STATIC)
   title            String
   descriptionShort String    @default("")
   descriptionFull  String?   @db.Text
@@ -148,7 +153,10 @@ model Article {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
+  section ContentSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+
   @@index([blockType])
+  @@index([sectionId])
 }
 
 // Уникальное прослушивание трека: один пользователь = один учтённый просмотр трека.

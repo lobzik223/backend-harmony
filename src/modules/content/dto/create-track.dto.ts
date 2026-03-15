@@ -1,4 +1,4 @@
-import { IsString, IsBoolean, IsInt, Min, IsOptional } from 'class-validator';
+import { IsString, IsBoolean, IsInt, Min, IsOptional, IsIn } from 'class-validator';
 
 export class CreateTrackDto {
   @IsString()
@@ -18,6 +18,14 @@ export class CreateTrackDto {
   @IsOptional()
   @IsString()
   audioUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  videoUrl?: string;
+
+  @IsOptional()
+  @IsIn(['AUDIO', 'VIDEO'])
+  mediaType?: string;
 
   @IsOptional()
   @IsString()

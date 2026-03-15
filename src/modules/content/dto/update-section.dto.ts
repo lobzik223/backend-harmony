@@ -10,8 +10,12 @@ export class UpdateSectionDto {
   slug?: string;
 
   @IsOptional()
-  @IsIn(['MEDITATION', 'SLEEP'])
+  @IsIn(['MEDITATION', 'SLEEP', 'HOME'])
   type?: string;
+
+  @IsOptional()
+  @IsIn(['STATIC', 'TRACKS', 'VIDEO'])
+  cardType?: string;
 
   @IsOptional()
   @IsInt()

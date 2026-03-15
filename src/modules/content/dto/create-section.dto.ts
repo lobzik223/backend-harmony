@@ -7,8 +7,12 @@ export class CreateSectionDto {
   @IsString()
   slug!: string;
 
-  @IsIn(['MEDITATION', 'SLEEP'])
+  @IsIn(['MEDITATION', 'SLEEP', 'HOME'])
   type!: string;
+
+  @IsOptional()
+  @IsIn(['STATIC', 'TRACKS', 'VIDEO'])
+  cardType?: string;
 
   @IsOptional()
   @IsInt()
