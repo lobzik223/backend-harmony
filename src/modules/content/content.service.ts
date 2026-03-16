@@ -285,6 +285,7 @@ export class ContentService {
         sortOrder: dto.sortOrder ?? 0,
         ...(publishedAt && { publishedAt }),
         ...(dto.durationMinutes != null && { durationMinutes: dto.durationMinutes }),
+        isPremium: dto.isPremium ?? false,
       },
     });
   }
@@ -318,6 +319,7 @@ export class ContentService {
         ...(dto.sortOrder != null && { sortOrder: dto.sortOrder }),
         ...(publishedAt !== undefined && { publishedAt }),
         ...(dto.durationMinutes !== undefined && { durationMinutes: dto.durationMinutes }),
+        ...(dto.isPremium !== undefined && { isPremium: dto.isPremium }),
       },
     });
   }

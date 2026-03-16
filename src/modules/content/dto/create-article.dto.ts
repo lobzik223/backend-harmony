@@ -1,4 +1,4 @@
-import { IsString, IsIn, IsInt, Min, IsOptional, MaxLength, MinLength } from 'class-validator';
+import { IsString, IsIn, IsInt, Min, IsOptional, IsBoolean, MaxLength, MinLength } from 'class-validator';
 
 export class CreateArticleDto {
   @IsIn(['FEATURED', 'RECOMMENDED', 'EMERGENCY'])
@@ -35,4 +35,8 @@ export class CreateArticleDto {
   @IsInt()
   @Min(0)
   durationMinutes?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isPremium?: boolean;
 }
