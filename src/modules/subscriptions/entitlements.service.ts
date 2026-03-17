@@ -23,6 +23,15 @@ export class EntitlementsService {
     return new Date() < user.premiumUntil;
   }
 
+  async isPro(userId: string): Promise<boolean> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { proUntil: true },
+    });
+    if (!user || !user.proUntil) return false;
+    return new Date() < user.proUntil;
+  }
+
   async getSubscription(userId: string): Promise<SubscriptionStatus> {
     const [sub, user] = await Promise.all([
       this.prisma.subscription.findUnique({ where: { userId } }),
@@ -68,6 +77,13 @@ export class EntitlementsService {
     await this.prisma.user.update({
       where: { id: userId },
       data: { premiumUntil: until },
+    });
+  }
+
+  async setProUntil(userId: string, until: Date): Promise<void> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { proUntil: until },
     });
   }
 }

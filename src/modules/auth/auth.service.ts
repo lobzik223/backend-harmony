@@ -477,12 +477,15 @@ export class AuthService {
         surname: true,
         createdAt: true,
         premiumUntil: true,
+        proUntil: true,
       },
     });
     if (!user) throw new UnauthorizedException('Пользователь не найден');
 
     const premiumUntil = user.premiumUntil;
+    const proUntil = user.proUntil;
     const isPremiumActive = premiumUntil != null && premiumUntil.getTime() > Date.now();
+    const isProActive = proUntil != null && proUntil.getTime() > Date.now();
     const sub = await this.entitlementsService.getSubscription(userId);
 
     return {
@@ -493,6 +496,9 @@ export class AuthService {
         surname: user.surname,
         createdAt: user.createdAt.toISOString(),
         premiumUntil: premiumUntil ? premiumUntil.toISOString() : null,
+        proUntil: proUntil ? proUntil.toISOString() : null,
+        isPremium: isPremiumActive,
+        isPro: isProActive,
         subscription: isPremiumActive ? SUBSCRIPTION_NAME_PREMIUM : null,
         subscriptionProductId: sub.productId,
         subscriptionStore: sub.store,

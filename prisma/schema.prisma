@@ -13,7 +13,8 @@ model User {
   name           String
   surname        String    @default("")
   passwordHash   String?
-  premiumUntil   DateTime?
+  premiumUntil   DateTime?  // Подписка Premium (аудио/медитации)
+  proUntil       DateTime?  // Подписка Pro (курсы)
   nameUpdatedAt  DateTime  @default(now())
   nameChangeCount Int      @default(0)
   createdAt      DateTime  @default(now())

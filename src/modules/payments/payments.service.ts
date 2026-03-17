@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { EntitlementsService, SUBSCRIPTION_NAME_PREMIUM } from '../subscriptions/entitlements.service';
 import { env } from '../../config/env.validation';
+import { getSubscriptionType, isKnownIAPProductId } from './iap-products';
 
 export interface PaymentPlan {
   id: string;
@@ -397,6 +398,8 @@ export class PaymentsService {
     ];
 
     let lastStatus: number | undefined;
+    let latestReceiptInfo: Array<{ product_id?: string; expires_date_ms?: string }> = [];
+
     for (const url of urls) {
       const res = await fetch(url, {
         method: 'POST',
@@ -405,29 +408,68 @@ export class PaymentsService {
       });
       const data = (await res.json()) as {
         status: number;
-        receipt?: { in_app?: Array<{ expires_date_ms?: string }> };
-        latest_receipt_info?: Array<{ expires_date_ms?: string }>;
+        receipt?: { in_app?: Array<{ product_id?: string; expires_date_ms?: string }> };
+        latest_receipt_info?: Array<{ product_id?: string; expires_date_ms?: string }>;
       };
       lastStatus = data.status;
 
       if (data.status === 0) {
-        const list = data.latest_receipt_info ?? data.receipt?.in_app ?? [];
-        let expiresMs = 0;
-        for (const item of list) {
-          const ms = item.expires_date_ms ? parseInt(item.expires_date_ms, 10) : 0;
-          if (ms > expiresMs) expiresMs = ms;
-        }
-        if (expiresMs > Date.now()) {
-          const days = Math.ceil((expiresMs - Date.now()) / (24 * 60 * 60 * 1000));
-          await this.entitlementsService.grantPremium(userId, days);
-          this.logger.log(`[Apple IAP] ${SUBSCRIPTION_NAME_PREMIUM} granted for user ${userId}`);
-          return { success: true };
-        }
+        latestReceiptInfo = data.latest_receipt_info ?? data.receipt?.in_app ?? [];
+        break;
       }
       if (data.status !== 21007) break;
     }
 
-    this.logger.warn(`[Apple IAP] Verify failed status=${lastStatus}`);
+    if (latestReceiptInfo.length === 0) {
+      this.logger.warn(`[Apple IAP] Verify failed status=${lastStatus}`);
+      throw new BadRequestException('Invalid or expired receipt');
+    }
+
+    let premiumExpiresMs = 0;
+    let proExpiresMs = 0;
+    let productIdForSubscription = '';
+
+    for (const item of latestReceiptInfo) {
+      const productId = item.product_id ?? '';
+      const type = getSubscriptionType(productId);
+      const ms = item.expires_date_ms ? parseInt(item.expires_date_ms, 10) : 0;
+      if (ms <= Date.now()) continue;
+      if (type === 'PREMIUM' && ms > premiumExpiresMs) {
+        premiumExpiresMs = ms;
+        productIdForSubscription = productId;
+      }
+      if (type === 'PRO' && ms > proExpiresMs) proExpiresMs = ms;
+    }
+
+    const now = new Date();
+    if (premiumExpiresMs > 0) {
+      const until = new Date(premiumExpiresMs);
+      await this.entitlementsService.setPremiumUntil(userId, until);
+      await this.prisma.subscription.upsert({
+        where: { userId },
+        create: {
+          userId,
+          productId: productIdForSubscription,
+          store: 'APPLE',
+          currentPeriodStart: now,
+          currentPeriodEnd: until,
+        },
+        update: {
+          productId: productIdForSubscription,
+          store: 'APPLE',
+          currentPeriodStart: now,
+          currentPeriodEnd: until,
+          updatedAt: now,
+        },
+      });
+      this.logger.log(`[Apple IAP] PREMIUM granted for user ${userId} until ${until.toISOString()}`);
+    }
+    if (proExpiresMs > 0) {
+      await this.entitlementsService.setProUntil(userId, new Date(proExpiresMs));
+      this.logger.log(`[Apple IAP] PRO granted for user ${userId} until ${new Date(proExpiresMs).toISOString()}`);
+    }
+
+    if (premiumExpiresMs > 0 || proExpiresMs > 0) return { success: true };
     throw new BadRequestException('Invalid or expired receipt');
   }
 
@@ -436,6 +478,10 @@ export class PaymentsService {
     purchaseToken: string,
     productId: string,
   ): Promise<{ success: boolean }> {
+    if (!isKnownIAPProductId(productId)) {
+      throw new BadRequestException(`Unknown product: ${productId}`);
+    }
+
     const keyPath = env.GOOGLE_APPLICATION_CREDENTIALS;
     const packageName = env.ANDROID_PACKAGE_NAME;
     if (!keyPath || !packageName) {
@@ -459,9 +505,36 @@ export class PaymentsService {
     if (expiryMs <= Date.now()) {
       throw new BadRequestException('Subscription expired');
     }
-    const days = Math.ceil((expiryMs - Date.now()) / (24 * 60 * 60 * 1000));
-    await this.entitlementsService.grantPremium(userId, days);
-    this.logger.log(`[Google IAP] ${SUBSCRIPTION_NAME_PREMIUM} granted for user ${userId}`);
+
+    const type = getSubscriptionType(productId);
+    const until = new Date(expiryMs);
+    const now = new Date();
+
+    if (type === 'PREMIUM') {
+      await this.entitlementsService.setPremiumUntil(userId, until);
+      await this.prisma.subscription.upsert({
+        where: { userId },
+        create: {
+          userId,
+          productId,
+          store: 'GOOGLE',
+          currentPeriodStart: now,
+          currentPeriodEnd: until,
+        },
+        update: {
+          productId,
+          store: 'GOOGLE',
+          currentPeriodStart: now,
+          currentPeriodEnd: until,
+          updatedAt: now,
+        },
+      });
+      this.logger.log(`[Google IAP] PREMIUM granted for user ${userId} until ${until.toISOString()}`);
+    } else if (type === 'PRO') {
+      await this.entitlementsService.setProUntil(userId, until);
+      this.logger.log(`[Google IAP] PRO granted for user ${userId} until ${until.toISOString()}`);
+    }
+
     return { success: true };
   }
 }
